@@ -219,7 +219,7 @@ export default function CheckoutModal({ onClose, selectedSize, productType = 'cu
             {productType === 'subscription' && (
               <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-lg">
                 <p className="text-sm text-gray-700">
-                  <span className="font-semibold">Subscription Details:</span> You'll receive a new set of custom nails every month. 
+                  <span className="font-semibold">Subscription Details:</span> You&apos;ll receive a new set of custom nails every month. 
                   Cancel anytime from your account dashboard.
                 </p>
               </div>

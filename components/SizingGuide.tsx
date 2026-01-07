@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera } from '@mediapipe/camera_utils'
 import { HAND_CONNECTIONS } from '@mediapipe/hands'
 import { Hands } from '@mediapipe/hands'
+import Image from 'next/image'
 
 interface SizingGuideProps {
   onClose: () => void
@@ -70,9 +71,10 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
   const checkCameraSupport = async (): Promise<boolean> => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       // Check if we're on iOS and need to use legacy API
-      const legacyGetUserMedia = navigator.getUserMedia || 
-                                 (navigator as any).webkitGetUserMedia || 
-                                 (navigator as any).mozGetUserMedia
+      const nav = navigator as any
+      const legacyGetUserMedia = nav.getUserMedia || 
+                                 nav.webkitGetUserMedia || 
+                                 nav.mozGetUserMedia
       
       if (!legacyGetUserMedia) {
         return false
@@ -545,7 +547,7 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
               <div className="mb-6">
                 <h3 className="text-xl font-semibold mb-2 text-gray-900">Step 1: Select Your Coin</h3>
                 <p className="text-gray-600 mb-4">
-                  Place a coin next to your hand for accurate calibration. Select the type of coin you're using:
+                  Place a coin next to your hand for accurate calibration. Select the type of coin you&apos;re using:
                 </p>
                 
                 <div className="grid grid-cols-2 gap-3 mb-4">
@@ -762,8 +764,9 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
               </div>
 
               <div className="mb-6">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={capturedImage}
+                  src={capturedImage || ''}
                   alt="Captured hand"
                   className="w-full rounded-lg border border-gray-200"
                 />

@@ -46,7 +46,7 @@ export default function Home() {
                   Designer-made nails crafted from your inspiration
                 </p>
                 <p className="text-lg text-gray-500 mb-8">
-                  Share your vision, design, or inspo — we'll bring it to life, one nail at a time
+                  Share your vision, design, or inspo — we&apos;ll bring it to life, one nail at a time
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
                   <a
@@ -90,7 +90,7 @@ export default function Home() {
                 <div className="text-5xl mb-4">🎨</div>
                 <h3 className="text-2xl font-elegant font-semibold mb-4 text-gray-900">Your Inspiration</h3>
                 <p className="text-gray-600">
-                  Share your design ideas, inspo photos, or Pinterest boards. We'll craft your vision into reality.
+                  Share your design ideas, inspo photos, or Pinterest boards. We&apos;ll craft your vision into reality.
                 </p>
               </div>
               <div className="text-center p-8 rounded-2xl bg-gradient-to-br from-primary-50 to-pink-50">
@@ -139,7 +139,7 @@ export default function Home() {
                 <div className="flex-1 text-center md:text-left">
                   <h3 className="text-2xl font-elegant font-semibold mb-2 text-gray-900">Perfect Fit Measurement</h3>
                   <p className="text-gray-600">
-                    Use our AI sizing guide to ensure your nails fit perfectly. We'll measure your nails precisely for a custom fit.
+                    Use our AI sizing guide to ensure your nails fit perfectly. We&apos;ll measure your nails precisely for a custom fit.
                   </p>
                 </div>
               </div>
