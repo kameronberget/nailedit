@@ -66,10 +66,34 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
     }
   }, [step])
 
-  useEffect(() => {
+  // Check for camera availability and iOS compatibility
+  const checkCameraSupport = async (): Promise<boolean> => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      // Check if we're on iOS and need to use legacy API
+      const legacyGetUserMedia = navigator.getUserMedia || 
+                                 (navigator as any).webkitGetUserMedia || 
+                                 (navigator as any).mozGetUserMedia
+      
+      if (!legacyGetUserMedia) {
+        return false
+      }
+    }
+    return true
+  }
+
+  // Initialize camera with iOS compatibility
+  const initializeCamera = async () => {
     if (!videoRef.current || !canvasRef.current) return
 
+    const hasSupport = await checkCameraSupport()
+    if (!hasSupport) {
+      setError('Camera access is not available. Please ensure you are using HTTPS or localhost, and grant camera permissions.')
+      setIsLoading(false)
+      return
+    }
+
     let isMounted = true
+    let stream: MediaStream | null = null
     const hands = new Hands({
       locateFile: (file) => {
         return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -148,25 +172,145 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
 
     handsRef.current = hands
 
-    const camera = new Camera(videoRef.current, {
-      onFrame: async () => {
-        if (isMounted && videoRef.current && handsRef.current) {
-          try {
-            await handsRef.current.send({ image: videoRef.current })
-          } catch (err) {
-            // Ignore errors if component is unmounting
-            if (isMounted) {
-              console.error('Error sending frame to MediaPipe:', err)
+    // Try to initialize camera with better error handling for iOS
+    try {
+      // Request camera access
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+      })
+
+      if (!videoRef.current) return
+
+      // Set video source
+      videoRef.current.srcObject = stream
+      
+      // Detect iOS
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      
+      // For iOS, use manual frame capture (MediaPipe Camera doesn't work on iOS)
+      if (isIOS) {
+        videoRef.current.onloadedmetadata = () => {
+          if (!isMounted || !videoRef.current) return
+          
+          videoRef.current.play().then(() => {
+            const captureFrame = async () => {
+              if (!isMounted || !videoRef.current || !handsRef.current) return
+              
+              // Check if video is ready
+              if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+                try {
+                  await handsRef.current.send({ image: videoRef.current })
+                } catch (err) {
+                  if (isMounted) {
+                    console.error('Error sending frame:', err)
+                  }
+                }
+              }
+              
+              if (isMounted) {
+                requestAnimationFrame(captureFrame)
+              }
             }
+            
+            captureFrame()
+            
+            if (isMounted) {
+              setIsLoading(false)
+            }
+          }).catch((err) => {
+            console.error('Error playing video:', err)
+            if (isMounted) {
+              setError('Failed to start camera. Please ensure camera permissions are granted.')
+              setIsLoading(false)
+            }
+          })
+        }
+      } else {
+        // For non-iOS, try MediaPipe Camera first, fallback to manual
+        try {
+          const camera = new Camera(videoRef.current, {
+            onFrame: async () => {
+              if (isMounted && videoRef.current && handsRef.current) {
+                try {
+                  await handsRef.current.send({ image: videoRef.current })
+                } catch (err) {
+                  if (isMounted) {
+                    console.error('Error sending frame to MediaPipe:', err)
+                  }
+                }
+              }
+            },
+            width: 640,
+            height: 480,
+          })
+
+          camera.start()
+          cameraRef.current = camera
+          
+          if (isMounted) {
+            setIsLoading(false)
+          }
+        } catch (cameraError) {
+          // Fallback: manual frame capture
+          console.warn('MediaPipe Camera not available, using manual capture:', cameraError)
+          videoRef.current.onloadedmetadata = () => {
+            if (!isMounted || !videoRef.current) return
+            
+            videoRef.current.play().then(() => {
+              const captureFrame = async () => {
+                if (!isMounted || !videoRef.current || !handsRef.current) return
+                
+                if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+                  try {
+                    await handsRef.current.send({ image: videoRef.current })
+                  } catch (err) {
+                    if (isMounted) {
+                      console.error('Error sending frame:', err)
+                    }
+                  }
+                }
+                
+                if (isMounted) {
+                  requestAnimationFrame(captureFrame)
+                }
+              }
+              
+              captureFrame()
+              
+              if (isMounted) {
+                setIsLoading(false)
+              }
+            }).catch((err) => {
+              console.error('Error playing video:', err)
+              if (isMounted) {
+                setError('Failed to start camera.')
+                setIsLoading(false)
+              }
+            })
           }
         }
-      },
-      width: 640,
-      height: 480,
-    })
-
-    camera.start()
-    cameraRef.current = camera
+      }
+    } catch (err: any) {
+      console.error('Camera access error:', err)
+      if (isMounted) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError('Camera permission denied. Please allow camera access in your browser settings.')
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          setError('No camera found. Please ensure a camera is connected.')
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          setError('Camera is already in use by another application.')
+        } else {
+          setError(`Camera error: ${err.message || 'Unable to access camera. Please ensure you are using HTTPS.'}`)
+        }
+        setIsLoading(false)
+      }
+      return
+    }
     
     if (isMounted) {
       setIsLoading(false)
@@ -178,7 +322,16 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
         clearTimeout(captureTimeoutRef.current)
       }
       if (cameraRef.current) {
-        cameraRef.current.stop()
+        try {
+          cameraRef.current.stop()
+        } catch (err) {
+          // Ignore cleanup errors
+        }
+      }
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream
+        stream.getTracks().forEach(track => track.stop())
+        videoRef.current.srcObject = null
       }
       if (handsRef.current) {
         try {
@@ -188,7 +341,17 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
         }
       }
     }
-  }, [step, coinPoints, calibrationData])
+  }
+
+  useEffect(() => {
+    // Only initialize camera when not in coin-selection step
+    if (step !== 'coin-selection') {
+      initializeCamera()
+    } else {
+      setIsLoading(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, coinPoints.length, calibrationData])
 
   const calculateNailSize = (
     landmarks: any[],
