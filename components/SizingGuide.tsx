@@ -32,10 +32,14 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [detectedSize, setDetectedSize] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const handsRef = useRef<Hands | null>(null)
   const cameraRef = useRef<Camera | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
   const isCapturingRef = useRef(false)
   const captureTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -176,14 +180,16 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
 
     // Try to initialize camera with better error handling for iOS
     try {
-      // Request camera access
+      // Request camera access with current facing mode
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'user',
+          facingMode: facingMode,
           width: { ideal: 640 },
           height: { ideal: 480 },
         },
       })
+      
+      streamRef.current = stream
 
       if (!videoRef.current) return
 
@@ -215,7 +221,7 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
               }
               
               if (isMounted) {
-                requestAnimationFrame(captureFrame)
+                animationFrameRef.current = requestAnimationFrame(captureFrame)
               }
             }
             
@@ -278,7 +284,7 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
                 }
                 
                 if (isMounted) {
-                  requestAnimationFrame(captureFrame)
+                  animationFrameRef.current = requestAnimationFrame(captureFrame)
                 }
               }
               
@@ -353,7 +359,7 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
       setIsLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, coinPoints.length, calibrationData])
+  }, [step, coinPoints.length, calibrationData, facingMode])
 
   const calculateNailSize = (
     landmarks: any[],
@@ -520,6 +526,49 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
     setError(null)
   }
 
+  // Function to switch camera
+  const switchCamera = async () => {
+    if (isSwitchingCamera) return
+    
+    setIsSwitchingCamera(true)
+    setError(null)
+    setIsLoading(true)
+    
+    // Stop current stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+    
+    if (cameraRef.current) {
+      try {
+        cameraRef.current.stop()
+      } catch (err) {
+        // Ignore errors
+      }
+      cameraRef.current = null
+    }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    
+    // Switch facing mode
+    const newFacingMode = facingMode === 'user' ? 'environment' : 'user'
+    setFacingMode(newFacingMode)
+    
+    // Small delay to ensure cleanup is complete
+    setTimeout(() => {
+      setIsSwitchingCamera(false)
+      // The useEffect will re-run and initialize the new camera
+    }, 100)
+  }
+
   const handleConfirm = () => {
     if (detectedSize) {
       onSizeSelected(detectedSize)
@@ -653,6 +702,20 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
                   width={640}
                   height={480}
                 />
+                <button
+                  onClick={switchCamera}
+                  disabled={isSwitchingCamera || isLoading}
+                  className="absolute top-4 right-4 bg-black bg-opacity-50 hover:bg-opacity-70 text-white p-3 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={`Switch to ${facingMode === 'user' ? 'back' : 'front'} camera`}
+                >
+                  {isSwitchingCamera ? (
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                </button>
               </div>
 
               {error && (
@@ -725,6 +788,20 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
                   width={640}
                   height={480}
                 />
+                <button
+                  onClick={switchCamera}
+                  disabled={isSwitchingCamera || isLoading}
+                  className="absolute top-4 right-4 bg-black bg-opacity-50 hover:bg-opacity-70 text-white p-3 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed z-10"
+                  title={`Switch to ${facingMode === 'user' ? 'back' : 'front'} camera`}
+                >
+                  {isSwitchingCamera ? (
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                </button>
               </div>
 
               {error && (
@@ -736,7 +813,7 @@ export default function SizingGuide({ onClose, onSizeSelected }: SizingGuideProp
               <div className="mt-6 flex gap-4">
                 <button
                   onClick={handleCapture}
-                  disabled={isLoading || !calibrationData}
+                  disabled={isLoading || !calibrationData || isSwitchingCamera}
                   className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Capture & Measure
